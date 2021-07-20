@@ -1,4 +1,4 @@
- clc;
+clc;
 clear('all');
 rng('default');
 warning('off','all');
@@ -6,7 +6,7 @@ format long;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SIMULATION CONFIGURATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 PARAMETERS = {};
-PARAMETERS.CREATE_PDF = true;
+PARAMETERS.CREATE_PDF = false;
 PARAMETERS.SAMPLING_TIME = 1e-1;
 PARAMETERS.TOTAL_TIME = 1200;
 PARAMETERS.NORRBIN_A1 = 13.17;
@@ -14,7 +14,7 @@ PARAMETERS.NORRBIN_A2 = 16323.46;
 PARAMETERS.K = 0.21;
 PARAMETERS.T = 107.76;
 PARAMETERS.PLOT_FONT_SIZE = 9.0;
-PARAMETERS.SIMULATION_TYPE = 2; % 1->Straight line path; 2->Sinusoidal path
+PARAMETERS.SIMULATION_TYPE = 1; % 1->Straight line path; 2->Sinusoidal path
 PARAMETERS.DISTURBANCE_TYPE = 0; % 0->No disturbance; 1->Train of sinusoidal multiple frequencies disturbance 
 if PARAMETERS.DISTURBANCE_TYPE == 0
     PARAMETERS.DISTURBANCE_AMPLITUDE = 0.0;
@@ -28,13 +28,14 @@ PARAMETERS.REFERENCE_FREQUENCY = 2*pi/600;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% CONTROL PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 PARAMETERS.SETTLING_TIME = 150;
-PARAMETERS.CONTROL_ALFA_ZERO = -log(1.0e-4/PARAMETERS.REFERENCE_AMPLITUDE)/PARAMETERS.SETTLING_TIME;
+PARAMETERS.EPSILON = 1.0e-3;
+PARAMETERS.CONTROL_ALFA_ZERO = -log(PARAMETERS.EPSILON/PARAMETERS.REFERENCE_AMPLITUDE)/PARAMETERS.SETTLING_TIME;
 PARAMETERS.CONTROL_YAW_RATE_MAX = 0.70*pi/180;
 PARAMETERS.CONTROL_LAMBDA_MIN = 1.0*PARAMETERS.CONTROL_YAW_RATE_MAX/PARAMETERS.REFERENCE_AMPLITUDE;
 PARAMETERS.CONTROL_LAMBDA_MAX = 2.0*PARAMETERS.CONTROL_LAMBDA_MIN;
-PARAMETERS.CONTROL_POWER_GAIN_MIN = 0.868;
-PARAMETERS.CONTROL_POWER_GAIN_MAX = PARAMETERS.REFERENCE_AMPLITUDE*(1.0+PARAMETERS.CONTROL_POWER_GAIN_MIN) + PARAMETERS.CONTROL_POWER_GAIN_MIN;
-PARAMETERS.KAPPA_GAIN = 1.0;
+PARAMETERS.CONTROL_POWER_GAIN_MIN = 1.76952;
+PARAMETERS.CONTROL_POWER_GAIN_MAX = 2.0*PARAMETERS.CONTROL_POWER_GAIN_MIN;
+PARAMETERS.KAPPA_GAIN = 1.0/PARAMETERS.EPSILON;
 
 % Run simularion
 if PARAMETERS.SIMULATION_TYPE  == 1
@@ -206,11 +207,13 @@ function SIMULATION_DATA = run_simulation(PARAMETERS)
         aism_control_prev = SIMULATION_DATA.AISM.control;        
         aism_lambda = PARAMETERS.CONTROL_LAMBDA_MAX - ((PARAMETERS.CONTROL_LAMBDA_MAX-PARAMETERS.CONTROL_LAMBDA_MIN)/PARAMETERS.REFERENCE_AMPLITUDE)*abs(aism_yaw_error);
         dot_aism_lambda = - ((PARAMETERS.CONTROL_LAMBDA_MAX-PARAMETERS.CONTROL_LAMBDA_MIN)/PARAMETERS.REFERENCE_AMPLITUDE)*sign(aism_yaw_error)*dot_aism_yaw_error;        
-        aism_s = dot_aism_yaw_error + aism_lambda*aism_yaw_error ; 
+        aism_s = dot_aism_yaw_error + aism_lambda*aism_yaw_error; 
         aism_alfa = SIMULATION_DATA.AISM.int_dot_aism_alfa;
         aism_z = aism_s + (aism_alfa/2.0)*SIMULATION_DATA.AISM.int_aism_s;
         aism_power_gain = ((PARAMETERS.CONTROL_POWER_GAIN_MAX - PARAMETERS.CONTROL_POWER_GAIN_MIN)/PARAMETERS.REFERENCE_AMPLITUDE)*abs(aism_yaw_error) + PARAMETERS.CONTROL_POWER_GAIN_MIN; 
+%         aism_power_gain = PARAMETERS.CONTROL_POWER_GAIN_MAX - ((PARAMETERS.CONTROL_POWER_GAIN_MAX - PARAMETERS.CONTROL_POWER_GAIN_MIN)/PARAMETERS.REFERENCE_AMPLITUDE)*abs(aism_yaw_error); 
         aism_kappa = PARAMETERS.KAPPA_GAIN*2.0/aism_alfa;
+%         aism_kappa = ((PARAMETERS.KAPPA_GAIN^(aism_power_gain+1))*2.0)/aism_alfa;
         dot_aism_alfa = aism_kappa*sign(aism_z)*(abs(aism_z)^aism_power_gain)*sign(aism_s);
         aism_gamma = (aism_alfa^2)/4.0;        
         aism_nu_e = aism_lambda*dot_aism_yaw_error + dot_aism_lambda*aism_yaw_error;
@@ -285,20 +288,21 @@ function plot_simulation(SIMULATION_DATA, PARAMETERS)
     plot(SIMULATION_DATA.data(:,1), SIMULATION_DATA.NICB.data(:,1)*180.0/pi ,'-', 'Color', 'r', 'LineWidth',1.0);    
     plot(SIMULATION_DATA.data(:,1), SIMULATION_DATA.SYN.data(:,1)*180.0/pi ,'-', 'Color', 'b', 'LineWidth',1.0);    
     plot(SIMULATION_DATA.data(:,1), SIMULATION_DATA.AISM.data(:,1)*180.0/pi ,'-', 'Color', 'k', 'LineWidth',1.0);    
-%     axes('Position',[.55 .77 .3 .1])
-%     box on
-%     data_size = size(SIMULATION_DATA.data(:,1),1) - 1;
-%     detail_size = floor(50.0/PARAMETERS.SAMPLING_TIME);
-%     from_to_detail = data_size-detail_size:data_size;    
-%     plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.data(from_to_detail,2)*180.0/pi ,'-', 'Color', 'c', 'LineWidth',1.5);
-%     grid on;
-%     hold on;
-%     plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.NICB.data(from_to_detail,1)*180.0/pi ,'-', 'Color', 'r', 'LineWidth',1.0); 
-%     plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.SYN.data(from_to_detail,1)*180.0/pi ,'-', 'Color', 'b',  'LineWidth',1.0);
-%     plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.AISM.data(from_to_detail,1)*180.0/pi ,'-', 'Color', 'k',  'LineWidth',1.0);
-% %     title('Detailed view of yaw error at steady-state');
-%     xlim([PARAMETERS.TOTAL_TIME-detail_size*PARAMETERS.SAMPLING_TIME, PARAMETERS.TOTAL_TIME]);
-    
+
+        axes('Position',[.55 .77 .3 .1])
+    box on
+    data_size = size(SIMULATION_DATA.data(:,1),1) - 1;
+    detail_size = floor(50.0/PARAMETERS.SAMPLING_TIME);
+    from_to_detail = data_size-detail_size:data_size;    
+    plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.data(from_to_detail,2)*180.0/pi ,'-', 'Color', 'c', 'LineWidth',1.5);
+    grid on;
+    hold on;
+    plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.NICB.data(from_to_detail,1)*180.0/pi ,'-', 'Color', 'r', 'LineWidth',1.0); 
+    plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.SYN.data(from_to_detail,1)*180.0/pi ,'-', 'Color', 'b',  'LineWidth',1.0);
+    plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.AISM.data(from_to_detail,1)*180.0/pi ,'-', 'Color', 'k',  'LineWidth',1.0);
+%     title('Detailed view of yaw error at steady-state');
+    xlim([PARAMETERS.TOTAL_TIME-detail_size*PARAMETERS.SAMPLING_TIME, PARAMETERS.TOTAL_TIME]);
+
     subplot(3,1,2);
     if create
         plot(SIMULATION_DATA.data(:,1), SIMULATION_DATA.data(:,3)*180.0/pi ,'-', 'Color', 'c', 'LineWidth',1.5); 
@@ -398,7 +402,7 @@ function plot_simulation(SIMULATION_DATA, PARAMETERS)
     plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.SYN.data(from_to_detail,5) ,'-', 'Color', 'b', 'LineWidth',1.0); 
     plot(SIMULATION_DATA.data(from_to_detail,1), SIMULATION_DATA.AISM.data(from_to_detail,5) ,'-', 'Color', 'K',  'LineWidth',1.0);
     xlim([PARAMETERS.TOTAL_TIME-detail_size*PARAMETERS.SAMPLING_TIME, PARAMETERS.TOTAL_TIME]);     
-    ylim([13.6182,13.6184]);     
+    ylim([13.613,13.623]);     
     %ylim([0.011347,0.011350]);     
     
     subplot(3,1,3);
@@ -413,19 +417,7 @@ function plot_simulation(SIMULATION_DATA, PARAMETERS)
     end
     plot(SIMULATION_DATA.data(:,1), SIMULATION_DATA.SYN.data(:,6)/PARAMETERS.TOTAL_TIME ,'-', 'Color', 'b', 'LineWidth',1.0);    
     plot(SIMULATION_DATA.data(:,1), SIMULATION_DATA.AISM.data(:,6)/PARAMETERS.TOTAL_TIME ,'-', 'Color', 'k', 'LineWidth',1.0);    
-     
-    
-%     fig3 = figure(3);
-%     create = true;
-%     if create
-%         clf(fig3);
-%     end
-%     plot(SIMULATION_DATA.NICB.data(:,7), SIMULATION_DATA.NICB.data(:,8) ,'-', 'Color', 'r', 'LineWidth',1.0);   
-%     grid on;
-%     hold on;
-%     plot(SIMULATION_DATA.SYN.data(:,7), SIMULATION_DATA.SYN.data(:,8) ,'-', 'Color', 'b', 'LineWidth',1.0);  
-%     plot(SIMULATION_DATA.AISM.data(:,7), SIMULATION_DATA.AISM.data(:,8) ,'-', 'Color', 'k', 'LineWidth',1.0);  
-    
+ 
     fig4 = figure(4);
     create = true;
     if create
@@ -532,6 +524,5 @@ function plot_simulation(SIMULATION_DATA, PARAMETERS)
                 export_fig('../MANUSCRIPT/GRAPHICS/sinusoidal_reference_s_d.pdf', '-transparent');
             end
         end
-    end
-    
+    end    
 end
